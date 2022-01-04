@@ -1,0 +1,18 @@
+{
+  "name": "xwvm-reporting-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "XWVM Reporting Server",
+  "keywords": [
+    "xwvm-reporting-server"
+  ],
+  "dependencies": {
+    "body-parser": "^1.19.1",
+    "express": "^4.17.2",
+    "helmet": "^4.6.0",
+    "oracledb": "file:/./node-oracledb-main",
+    "winston": "^3.3.3"
+  },
+  "author": "xwvm.art.team@gmail.com",
+  "license": "MIT"
+}

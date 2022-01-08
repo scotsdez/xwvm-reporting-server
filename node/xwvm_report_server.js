@@ -6,7 +6,7 @@
 *
 * The server runs on port 3000 by default.
 */
-const VERSION_ID = "0.116"
+const VERSION_ID = "0.117"
 
 const oracledb = require('oracledb');
 const express = require('express');
@@ -176,12 +176,12 @@ async function func_ReportUserLogin(res, username)
 }
 
 /*
-	Check if the given user exists. Returns user data if valid, otherwise false.
+	Check if the given user exists and is active. Returns user data if valid, otherwise false.
 	User data returned includes id, username and fullname.
 */
 async function checkUserExists(username)
 {
-  const usrSQL = "SELECT * FROM "+schema_name+".USERS WHERE USERNAME = :username";
+  const usrSQL = "SELECT * FROM "+schema_name+".USERS WHERE USERNAME = :username AND ACTIVE = 'Y'";
   var result = await func_CallDB(usrSQL, { username });
   
   if (result != null)

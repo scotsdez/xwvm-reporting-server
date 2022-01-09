@@ -6,7 +6,7 @@
 *
 * The server runs on port 3000 by default.
 */
-const VERSION_ID = "0.117"
+const VERSION_ID = "0.118"
 
 const oracledb = require('oracledb');
 const express = require('express');
@@ -29,17 +29,25 @@ const logger = new winston.createLogger(myWinstonOptions);
 	Init database connection pool 
 */
 async function init() {
+	var poolMax = 5;
+	var poolMin = 0;
+	var poolPingInterval = 30;
+	var poolTimeout = 60;
+	var queueTimeout = 10000;
+	
   try {
     await oracledb.createPool({
       user: dbConfig.user,
       password: dbConfig.password,
       connectString: dbConfig.connectString,
-      poolMax: 4, // maximum size of the pool. Increase UV_THREADPOOL_SIZE if you increase poolMax
-      poolMin: 4, // start with no connections; let the pool shrink completely
-      poolPingInterval: 60, // check aliveness of connection if idle in the pool for 60 seconds
-      poolTimeout: 60, // terminate connections that are idle in the pool for 60 seconds
-      queueTimeout: 10000, // terminate getConnection() calls queued for longer than 10000 milliseconds
+      poolMax: poolMax, // maximum size of the pool. Increase UV_THREADPOOL_SIZE if you increase poolMax
+      poolMin: poolMin, // start with no connections; let the pool shrink completely
+      poolPingInterval: poolPingInterval, // check aliveness of connection if idle in the pool for 30 seconds
+      poolTimeout: poolTimeout, // terminate connections that are idle in the pool for 60 seconds
+      queueTimeout: queueTimeout, // terminate getConnection() calls queued for longer than 10000 milliseconds
     });
+
+	logger.info(`Database pool created, pool max ${poolMax} min ${poolMin} interval ${poolPingInterval} timeout ${poolTimeout} queue timeout ${queueTimeout}`);
 
   } catch (err) {
     logger.error("init() error: " + err.message);
@@ -78,15 +86,15 @@ async function func_ReportMission(res, username, mission, outcome, gametype, ext
 /*
 	Report issues/errors for given user
 */
-async function func_ReportIssues(res, username, issues)
+async function func_ReportIssues(res, username, version, issues)
 {
   var userExists = await checkUserExists(username);
   if (userExists)
   {
-    const issueSQL = "INSERT INTO "+schema_name+".BUILD_REPORTING_ISSUES (USER_ID, ISSUES, SUBMITTED) VALUES (:userID, :c, SYSDATE)";
-    const issueJSON = JSON.stringify(errors);
+    const issueSQL = "INSERT INTO "+schema_name+".BUILD_REPORTING_ISSUES (USER_ID, VERSION, ISSUES, SUBMITTED) VALUES (:userID, :version, :c, SYSDATE)";
+    const issueJSON = JSON.stringify(issues);
 
-    var reportConfig = await func_CallDB(issueSQL, {userID : userExists.ID, c: issueJSON});  
+    var reportConfig = await func_CallDB(issueSQL, {userID : userExists.ID, version: version, c: issueJSON});  
     
     logger.info(`Reported errors/issues for ${username} (${userExists.ID})`);
     
@@ -206,31 +214,43 @@ async function func_CallDB(query, bindParams)
     bindParams = []
   }
   
-  try {
-     // Checkout a connection from the default pool
-    connection = await oracledb.getConnection();
+  var retryCount = 2;
+  while (retryCount > 0)
+  {
+	    try {
+		 // Checkout a connection from the default pool
+		connection = await oracledb.getConnection();
 
-    result = await connection.execute(query, bindParams, {outFormat: oracledb.OUT_FORMAT_OBJECT});
-    
-    // commit if there are any rows affected.
-    if (result != null)
-    {
-      if (result.rowsAffected >= 1)
-      {
-        connection.commit();
-      }
-    }
-  } catch (err) {
-    console.error(err);
-  } finally {
-    if (connection) {
-      try {
-        await connection.close();
-      } catch (err) {
-        console.error(err);
-      }  
-    }
-  }  
+		result = await connection.execute(query, bindParams, {outFormat: oracledb.OUT_FORMAT_OBJECT});
+		
+		// commit if there are any rows affected.
+		if (result != null)
+		{
+		  if (result.rowsAffected >= 1)
+		  {
+			connection.commit();
+		  }
+		}
+	  } catch (err) {
+		console.error(err);
+		// decrement retry counter and try again if applicable
+		retryCount -= 1;
+		console.info("Connection retry count: ${retryCount}");
+	  } finally {
+		if (connection) {
+		  try {
+			await connection.close();
+		  } catch (err) {
+			console.error(err);
+		  }  
+		}
+		// successful connection, flag no retry required.
+		retryCount = 0;
+	  }  
+	  
+  }
+  
+
   return result;
 }
 
@@ -346,10 +366,11 @@ app.post('/services/reportConfig', (req,res) => {
 */
 app.post('/services/reportIssues', (req,res) => {
   var username = req.body.username;
+  var version = req.body.version;
   var issues = req.body.issues;
   if (!util_StringIsEmpty(username))
   {
-    func_ReportIssues(res, username, issues);
+    func_ReportIssues(res, username, version, issues);
   }
   else
   {

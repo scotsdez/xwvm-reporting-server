@@ -6,7 +6,7 @@
 *
 * The server runs on port 3000 by default.
 */
-const VERSION_ID = "0.118"
+const VERSION_ID = "0.119"
 
 const oracledb = require('oracledb');
 const express = require('express');
@@ -21,6 +21,11 @@ const schema_name = "APEX_USER";
 
 const consoleTransport = new winston.transports.Console();
 const myWinstonOptions = {
+	format: winston.format.combine(
+		winston.format.colorize({ all: true }),
+		winston.format.timestamp({ format: 'YYYY/MM/DD HH:mm:ss' }),
+		winston.format.printf(info => `[${info.timestamp}] ${info.level}: ${info.message}`)
+	  ),
     transports: [consoleTransport]
 };
 const logger = new winston.createLogger(myWinstonOptions);

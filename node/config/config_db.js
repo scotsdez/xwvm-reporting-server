@@ -20,4 +20,7 @@ module.exports = {
 
 	// Optional, defaults to false
 	// externalAuth : process.env.NODE_ORACLEDB_EXTERNALAUTH ? true : false
+
+	// define the name of the schema containing the alpha app.
+	schema_name: "APEX_USER"
 };
